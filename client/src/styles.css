@@ -1,0 +1,152 @@
+:root {
+  --bg: #0f172a;
+  --card: #1e293b;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+  --ok: #22c55e;
+  --off: #ef4444;
+  --border: #334155;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.topbar h1 {
+  margin: 0;
+}
+
+.status {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.status--ok { background: rgba(34, 197, 94, 0.15); color: var(--ok); }
+.status--off { background: rgba(239, 68, 68, 0.15); color: var(--off); }
+
+.now-serving {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+}
+.now-serving .label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.8rem; }
+.now-serving .token { font-size: 3.5rem; font-weight: 800; line-height: 1; }
+.now-serving .serving-name { color: var(--muted); font-size: 1.1rem; }
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+.card h2 { margin: 0 0 0.75rem; font-size: 1rem; }
+
+.row { display: flex; gap: 0.5rem; }
+
+input {
+  flex: 1;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #0b1220;
+  color: var(--text);
+  font-size: 1rem;
+}
+input:focus { outline: 2px solid var(--accent); }
+
+button {
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { background: var(--accent-hover); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-primary { width: 100%; }
+
+.hint { color: var(--muted); font-size: 0.85rem; margin: 0.5rem 0 0; }
+.empty { color: var(--muted); }
+.error { color: var(--off); font-weight: 600; }
+
+.queue-table { width: 100%; border-collapse: collapse; }
+.queue-table th, .queue-table td {
+  text-align: left;
+  padding: 0.6rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.queue-table th { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* ---- Patient waiting-room screen ---- */
+.patient {
+  text-align: center;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+}
+.dot {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  width: 0.9rem;
+  height: 0.9rem;
+  padding: 0;
+  border-radius: 50%;
+}
+.now-serving--big {
+  width: 100%;
+  max-width: 700px;
+  padding: 3rem 1.5rem;
+}
+.now-serving--big .label { font-size: 1.1rem; }
+.token--xl {
+  font-size: clamp(5rem, 22vw, 14rem);
+  font-weight: 900;
+}
+.waiting-count { color: var(--muted); font-size: 1.25rem; margin: 0; }
+.lookup { width: 100%; max-width: 420px; }
+.lookup-result { font-size: 1.15rem; margin: 0.75rem 0 0; }
+.lookup-result--now { color: var(--ok); font-weight: 700; }
+.lookup-result--muted { color: var(--muted); }
