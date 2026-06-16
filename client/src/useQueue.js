@@ -10,10 +10,12 @@ export function useQueue() {
     queue: [],
   });
   const [connected, setConnected] = useState(socket.connected);
+  const [hasSynced, setHasSynced] = useState(false);
 
   useEffect(() => {
     function onState(next) {
       setState(next);
+      setHasSynced(true);
     }
     function onConnect() {
       setConnected(true);
@@ -33,5 +35,5 @@ export function useQueue() {
     };
   }, []);
 
-  return { state, connected };
+  return { state, connected, hasSynced };
 }

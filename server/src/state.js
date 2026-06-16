@@ -44,15 +44,55 @@ export function getState() {
 }
 
 // Add a patient, auto-assigning the next token number.
-export function addPatient(name) {
-  const clean = String(name || '').trim();
+export function addPatient(patient) {
+  const clean = String(
+    typeof patient === 'object' && patient !== null ? patient.name : patient
+  ).trim();
   if (!clean) {
     throw new Error('Patient name is required');
   }
+
+  const rawFee =
+    typeof patient === 'object' && patient !== null ? patient.consultFee : 0;
+  const consultFee = Number(rawFee || 0);
+  if (!Number.isFinite(consultFee) || consultFee < 0) {
+    throw new Error('Consultation fee must be a non-negative number');
+  }
+
+  // Optional age — if provided must be 1–120
+  const rawAge = typeof patient === 'object' && patient !== null ? patient.age : '';
+  const ageStr = String(rawAge || '').trim();
+  if (ageStr !== '') {
+    const ageNum = Number(ageStr);
+    if (!Number.isInteger(ageNum) || ageNum < 1 || ageNum > 120) {
+      throw new Error('Age must be a whole number between 1 and 120');
+    }
+  }
+
+  const rawContact =
+    typeof patient === 'object' && patient !== null ? (patient.contact || '') : '';
+  const contact = String(rawContact).trim();
+  if (!contact) {
+    throw new Error('Contact number is required');
+  }
+  if (!/^[0-9]{10}$/.test(contact)) {
+    throw new Error('Contact number must be exactly 10 digits');
+  }
+  if (/^(\d)\1{9}$/.test(contact)) {
+    throw new Error('Contact number cannot be all identical digits (e.g. 0000000000)');
+  }
+
   state.lastIssuedToken += 1;
   state.queue.push({
     tokenNumber: state.lastIssuedToken,
     name: clean,
+    age:     typeof patient === 'object' && patient !== null ? (patient.age     || '') : '',
+    sex:     typeof patient === 'object' && patient !== null ? (patient.sex     || '') : '',
+    place:   typeof patient === 'object' && patient !== null ? (patient.place   || '') : '',
+    contact,
+    consultFee: Math.round(consultFee),
+    receiptNumber: `RCPT-${String(state.lastIssuedToken).padStart(4, '0')}`,
+    paidAt: new Date().toISOString(),
     status: 'waiting',
   });
   persist();
@@ -71,6 +111,37 @@ export function callNext() {
   });
   next.status = 'serving';
   state.currentToken = next.tokenNumber;
+  persist();
+  return getState();
+}
+
+// Mark the currently-serving patient as done (doctor finished, no one next).
+export function finishCurrent() {
+  state.queue.forEach((p) => {
+    if (p.status === 'serving') p.status = 'done';
+  });
+  // Keep currentToken as-is so patient screen can distinguish "room was used"
+  // but clear any active serving indicator via queue status only.
+  persist();
+  return getState();
+}
+
+// Remove a waiting patient who cancelled or left before consultation.
+export function removePatient(tokenNumber) {
+  const token = Number(tokenNumber);
+  if (!Number.isInteger(token) || token <= 0) {
+    throw new Error('Valid token number is required');
+  }
+
+  const patient = state.queue.find((p) => p.tokenNumber === token);
+  if (!patient) {
+    throw new Error('Patient not found');
+  }
+  if (patient.status !== 'waiting') {
+    throw new Error('Only waiting patients can be removed');
+  }
+
+  state.queue = state.queue.filter((p) => p.tokenNumber !== token);
   persist();
   return getState();
 }

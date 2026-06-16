@@ -6,6 +6,8 @@ import {
   getState,
   addPatient,
   callNext,
+  finishCurrent,
+  removePatient,
   setAvgTime,
   resetState,
 } from './state.js';
@@ -17,7 +19,7 @@ const app = express();
 app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json());
 
-// Health check endpoint (useful for Render/Railway uptime checks).
+// Health check endpoint.
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', state: getState() });
 });
@@ -35,12 +37,12 @@ function broadcastState() {
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
 
-  // Send current state immediately on connect so new screens render right away.
+  // Send current state immediately on connect.
   socket.emit('queue:state', getState());
 
-  socket.on('patient:add', (name, ack) => {
+  socket.on('patient:add', (data, ack) => {
     try {
-      addPatient(name);
+      addPatient(data);
       broadcastState();
       ack?.({ ok: true });
     } catch (err) {
@@ -52,6 +54,23 @@ io.on('connection', (socket) => {
     callNext();
     broadcastState();
     ack?.({ ok: true });
+  });
+
+  // Doctor finished with current patient, no one next in queue.
+  socket.on('finish:current', (ack) => {
+    finishCurrent();
+    broadcastState();
+    ack?.({ ok: true });
+  });
+
+  socket.on('patient:remove', (tokenNumber, ack) => {
+    try {
+      removePatient(tokenNumber);
+      broadcastState();
+      ack?.({ ok: true });
+    } catch (err) {
+      ack?.({ ok: false, error: err.message });
+    }
   });
 
   socket.on('avgTime:set', (minutes, ack) => {

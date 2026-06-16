@@ -1,51 +1,139 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueue } from '../useQueue.js';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Web-Audio chime — no audio files needed.
+// ─────────────────────────────────────────────────────────────────────────────
+function playChime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const frequencies = [880, 1320, 1760];
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(0.55, ctx.currentTime);
+    masterGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.8);
+    masterGain.connect(ctx.destination);
+
+    frequencies.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const g   = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      g.gain.setValueAtTime(i === 0 ? 0.6 : 0.25, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.4);
+      osc.connect(g);
+      g.connect(masterGain);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime  + 1.8);
+    });
+    setTimeout(() => ctx.close(), 2200);
+  } catch {
+    // AudioContext blocked — silently skip
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Idle-state taxonomy (deliberately documented):
+//
+//   serving exists            → show token number
+//   !serving + waiting > 0   → "Please Wait" (patients registered, doctor between calls)
+//   !serving + currentToken > 0 + waiting === 0
+//                             → "Room Free"  (last patient done, doctor finished)
+//   !serving + currentToken === 0 + waiting > 0
+//                             → "Please Wait" (new patients, clinic just opening)
+//   !serving + currentToken === 0 + waiting === 0
+//                             → "Standby"    (nothing ever happened today)
+//
+// Chime fires only on genuine NEW token calls, never on first page load.
+// ─────────────────────────────────────────────────────────────────────────────
 export default function Patient() {
-  const { state, connected } = useQueue();
-  const [lookup, setLookup] = useState('');
+  const { state, connected, hasSynced } = useQueue();
+  const [flash, setFlash]   = useState(false);
+  const prevTokenRef        = useRef(null);   // null = not yet initialised
 
-  const waiting = state.queue.filter((p) => p.status === 'waiting');
+  // Detect "Now Serving" change → chime + flash.
+  // We use hasSynced so the very first state sync never triggers it.
+  useEffect(() => {
+    if (!hasSynced) return;
 
-  // Compute wait estimate for the looked-up token.
-  const result = useMemo(() => {
-    const token = Number(lookup);
-    if (!lookup || !Number.isInteger(token)) return null;
+    const token = state.currentToken;
+    if (prevTokenRef.current === null) {
+      // First snapshot received from server, record but do not chime
+      prevTokenRef.current = token;
+      return;
+    }
 
-    const entry = state.queue.find((p) => p.tokenNumber === token);
-    if (!entry) {
-      return { found: false, token };
+    if (
+      token > 0 &&
+      prevTokenRef.current !== token
+    ) {
+      playChime();
+      setFlash(true);
+      const t = setTimeout(() => setFlash(false), 2200);
+      return () => clearTimeout(t);
     }
-    if (entry.status === 'serving') {
-      return { found: true, token, status: 'serving', wait: 0, name: entry.name };
-    }
-    if (entry.status === 'done') {
-      return { found: true, token, status: 'done', wait: 0, name: entry.name };
-    }
-    // waiting: count how many waiting patients are ahead of this token.
-    const ahead = waiting.filter((p) => p.tokenNumber < token).length;
-    return {
-      found: true,
-      token,
-      status: 'waiting',
-      ahead,
-      wait: ahead * state.avgConsultTime,
-      name: entry.name,
-    };
-  }, [lookup, state, waiting]);
+    prevTokenRef.current = token;
+  }, [state.currentToken, hasSynced]);
+
+  const waiting     = state.queue.filter((p) => p.status === 'waiting');
+  const serving     = state.queue.find((p)  => p.status === 'serving');
+  const servingWait = serving ? state.avgConsultTime : 0;
+
+  // Determine the idle label precisely.
+  function idleLabel() {
+    if (waiting.length > 0) return 'Please Wait';   // patients registered, doctor between calls
+    if (state.currentToken > 0) return 'Room Free'; // all done, room cleared
+    return 'Standby';                               // clinic hasn't started
+  }
+
+  // Determine the empty-queue sub-message precisely.
+  function emptyTitle()   {
+    if (state.currentToken > 0)  return 'Queue Cleared';
+    return 'No Queue Active';
+  }
+  function emptySub() {
+    if (state.currentToken > 0)
+      return 'The waiting room is empty. Walk-ins may register at the desk.';
+    return 'No patients registered yet. Registrations open at the reception.';
+  }
 
   return (
     <div className="page patient">
+      {!connected && (
+        <div className="connection-banner" role="alert">
+          ⚠️ Connection lost. Trying to reconnect to clinic...
+        </div>
+      )}
+
+      {/* Connection indicator */}
       <span
         className={connected ? 'status status--ok dot' : 'status status--off dot'}
-        title={connected ? 'Live' : 'Offline'}
+        title={connected ? 'Live' : 'Reconnecting…'}
       />
 
-      <section className="now-serving now-serving--big">
+      {/* ── Now Serving ─────────────────────────────────────────────── */}
+      <section
+        className={[
+          'now-serving now-serving--big',
+          flash    ? 'now-serving--flash' : '',
+          !serving ? 'now-serving--idle'  : '',
+        ].join(' ').trim()}
+      >
         <span className="label">Now Serving</span>
-        <span className="token token--xl">
-          {state.currentToken > 0 ? `#${state.currentToken}` : '—'}
-        </span>
+
+        {serving ? (
+          <span className="token token--xl">#{serving.tokenNumber}</span>
+        ) : (
+          <span className="idle-token">
+            <span className="idle-dots">
+              <span /><span /><span />
+            </span>
+            <span className="idle-text">{idleLabel()}</span>
+          </span>
+        )}
+
+        {flash && (
+          <span className="alert-badge">🔔 Number updated!</span>
+        )}
       </section>
 
       <p className="waiting-count">
@@ -54,45 +142,47 @@ export default function Patient() {
           : `${waiting.length} waiting · ~${state.avgConsultTime} min each`}
       </p>
 
-      <section className="lookup card">
-        <h2>Check your wait</h2>
-        <div className="row">
-          <input
-            type="number"
-            min="1"
-            placeholder="Enter your token number"
-            value={lookup}
-            onChange={(e) => setLookup(e.target.value)}
-            aria-label="Your token number"
-          />
-        </div>
-
-        {result && !result.found && (
-          <p className="lookup-result lookup-result--muted">
-            Token #{result.token} is not in the queue.
-          </p>
-        )}
-        {result && result.found && result.status === 'serving' && (
-          <p className="lookup-result lookup-result--now">
-            It's your turn, token #{result.token}! Please proceed.
-          </p>
-        )}
-        {result && result.found && result.status === 'done' && (
-          <p className="lookup-result lookup-result--muted">
-            Token #{result.token} has already been served.
-          </p>
-        )}
-        {result && result.found && result.status === 'waiting' && (
-          <p className="lookup-result">
-            {result.ahead === 0 ? (
-              <>You're next! Estimated wait: <strong>~0 min</strong>.</>
-            ) : (
-              <>
-                <strong>{result.ahead}</strong> ahead of you · estimated wait{' '}
-                <strong>~{result.wait} min</strong>.
-              </>
-            )}
-          </p>
+      {/* ── Live waiting list ─────────────────────────────────────────── */}
+      <section className="patient-list card">
+        <h2>Patients currently waiting</h2>
+        {waiting.length === 0 ? (
+          <div className="queue-empty-state" role="status" aria-live="polite">
+            <svg
+              className="queue-empty-state__svg"
+              viewBox="0 0 64 64"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <circle cx="32" cy="32" r="29" stroke="#d1fae5" strokeWidth="2" />
+              <circle
+                cx="32" cy="32" r="29"
+                stroke="#10b981" strokeWidth="2"
+                strokeDasharray="182" strokeDashoffset="0"
+                strokeLinecap="round"
+                className="queue-empty-state__ring"
+              />
+              <polyline
+                points="20,33 28,41 44,25"
+                stroke="#10b981" strokeWidth="3.5"
+                strokeLinecap="round" strokeLinejoin="round"
+                className="queue-empty-state__check"
+              />
+            </svg>
+            <p className="queue-empty-state__title">{emptyTitle()}</p>
+            <p className="queue-empty-state__sub">{emptySub()}</p>
+          </div>
+        ) : (
+          <div className="patient-list__rows">
+            {waiting.map((patient, index) => (
+              <div className="patient-list__row" key={patient.tokenNumber}>
+                <span className="patient-list__token">#{patient.tokenNumber}</span>
+                <span className="patient-list__wait">
+                  ~{servingWait + index * state.avgConsultTime} min
+                </span>
+              </div>
+            ))}
+          </div>
         )}
       </section>
     </div>
