@@ -2,6 +2,8 @@
 
 A live, real-time clinic queue system built for **Queue Cure '26**.
 
+🔗 **Live:** [Receptionist](https://smart-clinic-pi.vercel.app/receptionist) · [Doctor](https://smart-clinic-pi.vercel.app/doctor) · [Patient waiting room](https://smart-clinic-pi.vercel.app/patient)
+
 76% of India's clinics still run on paper token slips and shouting. SmartClinic
 replaces that with three synced screens: a **receptionist** registers patients
 and collects fees, a **doctor** calls the next patient with one click, and a
@@ -158,6 +160,7 @@ npm run dev          # http://localhost:3001
 ```bash
 cd client
 npm install
+cp .env.example .env # VITE_SERVER_URL defaults to http://localhost:3001
 npm run dev           # http://localhost:5173
 ```
 
@@ -173,8 +176,24 @@ the Patient screen update with a chime, with no refresh anywhere.
 
 ## Deploy
 
-- **Backend** → Render or Railway (both support WebSockets). Root dir `server`, start command `npm start`. Set `CORS_ORIGIN` to the deployed frontend URL.
-- **Frontend** → Vercel or Netlify. Root dir `client`, build `npm run build`, output `dist`. Set `VITE_SERVER_URL` to the deployed backend URL.
+**Live deployment:**
+
+- 🩺 Receptionist: <https://smart-clinic-pi.vercel.app/receptionist>
+- 🗂️ Doctor: <https://smart-clinic-pi.vercel.app/doctor>
+- 🖥️ Patient waiting room: <https://smart-clinic-pi.vercel.app/patient>
+- ⚙️ Backend health check: <https://smartclinic-production-cf90.up.railway.app/health>
+
+**How it's deployed:**
+
+- **Backend** → [Railway](https://railway.app). Root directory set to `server`, start command `npm start` (auto-detected from `package.json`). Environment variable `CORS_ORIGIN` is locked to the deployed frontend origin (`https://smart-clinic-pi.vercel.app`) — not `*` — so the API only accepts requests from the live frontend. `PORT` is injected automatically by Railway.
+- **Frontend** → [Vercel](https://vercel.com). Root directory set to `client`, build command `npm run build`, output directory `dist` (all auto-detected as a Vite project). Environment variable `VITE_SERVER_URL` points at the live Railway backend URL above. A `vercel.json` rewrite rule (`{ "source": "/(.*)", "destination": "/index.html" }`) is required so that visiting or refreshing on `/receptionist`, `/doctor`, or `/patient` directly doesn't 404 — without it, Vercel tries to find a real file at that path instead of letting React Router handle it client-side.
+
+**Known browser constraint:** the Patient screen's call-out chime uses the Web Audio API, which browsers block from producing sound until the page receives a real user gesture. On first load, the Patient screen shows a one-time "🔔 Tap once to enable the call-out sound" banner — whoever sets up the waiting-room display taps it once, and the chime then fires normally for every subsequent call. This is standard browser autoplay policy, not a bug.
+
+**To deploy your own copy:**
+
+- **Backend** → Render or Railway (both support WebSockets). Root dir `server`, start command `npm start`. Set `CORS_ORIGIN` to your deployed frontend URL.
+- **Frontend** → Vercel or Netlify. Root dir `client`, build `npm run build`, output `dist`. Set `VITE_SERVER_URL` to your deployed backend URL. Include `client/vercel.json` (above) if deploying to Vercel.
 
 ## Project structure
 
