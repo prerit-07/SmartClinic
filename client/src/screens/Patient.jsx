@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueue } from '../useQueue.js';
+import { shuffledTips } from '../healthTips.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Web-Audio chime — no audio files needed.
@@ -113,6 +114,34 @@ export default function Patient() {
   const serving     = state.queue.find((p)  => p.status === 'serving');
   const servingWait = serving ? state.avgConsultTime : 0;
 
+  // ── Rotating health tips ────────────────────────────────────────────
+  // Shown only while the screen is idle (no one currently being served) —
+  // a patient actively watching for their number shouldn't have their
+  // attention pulled toward a trivia rotation. Tips auto-advance every
+  // 12 seconds and reshuffle once the list is exhausted, so the order
+  // doesn't repeat identically on every loop.
+  const tipsRef  = useRef(shuffledTips());
+  const [tipIndex, setTipIndex] = useState(0);
+
+  useEffect(() => {
+    if (serving) return; // don't rotate tips while someone is being called
+
+    const interval = setInterval(() => {
+      setTipIndex((i) => {
+        const next = i + 1;
+        if (next >= tipsRef.current.length) {
+          tipsRef.current = shuffledTips();
+          return 0;
+        }
+        return next;
+      });
+    }, 12000);
+
+    return () => clearInterval(interval);
+  }, [serving]);
+
+  const currentTip = tipsRef.current[tipIndex];
+
   // Determine the idle label precisely.
   function idleLabel() {
     if (waiting.length > 0) return 'Please Wait';   // patients registered, doctor between calls
@@ -190,6 +219,14 @@ export default function Patient() {
           ? 'No patients waiting'
           : `${waiting.length} waiting · ~${state.avgConsultTime} min each`}
       </p>
+
+      {/* ── Health tip — fills idle time, hidden while someone is being served ── */}
+      {!serving && currentTip && (
+        <section className="health-tip card" aria-live="off">
+          <span className="health-tip__category">{currentTip.category}</span>
+          <p className="health-tip__text">{currentTip.text}</p>
+        </section>
+      )}
 
       {/* ── Live waiting list ─────────────────────────────────────────── */}
       <section className="patient-list card">
