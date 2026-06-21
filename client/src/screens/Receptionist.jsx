@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { socket } from '../socket.js';
 import { useQueue } from '../useQueue.js';
 
@@ -59,13 +59,134 @@ export default function Receptionist() {
   const [lastName, setLastName] = useState('');
   const [age, setAge] = useState('');
   const [sex, setSex] = useState('');
+
+  // Autocomplete Place States
   const [place, setPlace] = useState('');
+  const [filteredCities, setFilteredCities] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
+  const [isLoading, setIsLoading] = useState(false);
+  const autocompleteRef = useRef(null);
+  const isSelectingRef = useRef(false);
+
   const [contact, setContact] = useState('');
   const [consultFee, setConsultFee] = useState('');
   const [avgInput, setAvgInput] = useState('');
   const [error, setError] = useState('');
   // Track which tokens are mid-removal to prevent double-click race.
   const [removingTokens, setRemovingTokens] = useState(new Set());
+
+  // Click outside suggestions list
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (autocompleteRef.current && !autocompleteRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Debounced API call for external geocoding lookup
+  useEffect(() => {
+    const trimmed = place.trim();
+    if (trimmed.length < 3) {
+      setFilteredCities([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    if (isSelectingRef.current) {
+      isSelectingRef.current = false;
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(trimmed)}&format=json&addressdetails=1&limit=8&countrycodes=in`,
+          {
+            headers: {
+              'User-Agent': 'SmartClinic-Receptionist-App'
+            }
+          }
+        );
+        const data = await response.json();
+
+        const suggestions = data.map((item) => {
+          const name = item.address.city || item.address.town || item.address.village || item.address.hamlet || item.address.suburb || item.name;
+          const state = item.address.state || '';
+          const district = item.address.district || item.address.county || '';
+
+          // Show "Place, District, State" to disambiguate
+          const display = [name, district, state]
+            .filter(Boolean)
+            .filter((val, index, self) => self.indexOf(val) === index)
+            .join(', ');
+
+          return {
+            id: item.place_id || Math.random().toString(),
+            value: name,
+            label: display
+          };
+        }).filter(item => item.value);
+
+        // Deduplicate labels
+        const uniqueSuggestions = [];
+        const seenLabels = new Set();
+        for (const sug of suggestions) {
+          if (!seenLabels.has(sug.label.toLowerCase())) {
+            seenLabels.add(sug.label.toLowerCase());
+            uniqueSuggestions.push(sug);
+          }
+        }
+
+        setFilteredCities(uniqueSuggestions);
+        setShowDropdown(true);
+        setActiveSuggestionIndex(-1);
+      } catch (err) {
+        console.error('Error fetching places:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 450); // 450ms debounce to prevent API thrashing
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [place]);
+
+  function handlePlaceChange(val) {
+    setPlace(val);
+  }
+
+  function handlePlaceKeyDown(e) {
+    if (showDropdown && filteredCities.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActiveSuggestionIndex((prev) =>
+          prev < filteredCities.length - 1 ? prev + 1 : 0
+        );
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActiveSuggestionIndex((prev) =>
+          prev > 0 ? prev - 1 : filteredCities.length - 1
+        );
+      } else if (e.key === 'Enter') {
+        if (activeSuggestionIndex >= 0 && activeSuggestionIndex < filteredCities.length) {
+          e.preventDefault();
+          isSelectingRef.current = true;
+          setPlace(filteredCities[activeSuggestionIndex].value);
+          setShowDropdown(false);
+          setFilteredCities([]);
+        }
+      } else if (e.key === 'Escape') {
+        setShowDropdown(false);
+      }
+    }
+  }
+
 
   const waiting = state.queue.filter((p) => p.status === 'waiting');
   const serving = state.queue.find((p) => p.status === 'serving');
@@ -133,6 +254,8 @@ export default function Receptionist() {
     setAge('');
     setSex('');
     setPlace('');
+    setFilteredCities([]);
+    setShowDropdown(false);
     setContact('');
     setConsultFee('');
   }
@@ -241,13 +364,42 @@ export default function Receptionist() {
             </select>
           </div>
           <div className="row row--demo2">
-            <input
-              type="text"
-              placeholder="Place / City"
-              value={place}
-              onChange={(e) => setPlace(e.target.value)}
-              aria-label="Place"
-            />
+            <div className="autocomplete-container" ref={autocompleteRef}>
+              <input
+                type="text"
+                placeholder="Place / City"
+                value={place}
+                onChange={(e) => handlePlaceChange(e.target.value)}
+                onKeyDown={handlePlaceKeyDown}
+                aria-label="Place"
+                autoComplete="off"
+              />
+              {showDropdown && (isLoading || filteredCities.length > 0) && (
+                <ul className="autocomplete-dropdown">
+                  {isLoading ? (
+                    <li className="autocomplete-item autocomplete-item--loading">
+                      Searching places...
+                    </li>
+                  ) : (
+                    filteredCities.map((cityObj, index) => (
+                      <li
+                        key={cityObj.id}
+                        className={`autocomplete-item ${index === activeSuggestionIndex ? 'active' : ''
+                          }`}
+                        onClick={() => {
+                          isSelectingRef.current = true;
+                          setPlace(cityObj.value);
+                          setShowDropdown(false);
+                          setFilteredCities([]);
+                        }}
+                      >
+                        {cityObj.label}
+                      </li>
+                    ))
+                  )}
+                </ul>
+              )}
+            </div>
             <input
               id="contact-input"
               type="tel"

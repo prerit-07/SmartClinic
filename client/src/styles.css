@@ -807,3 +807,52 @@ select:focus {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ── Autocomplete City Dropdown ── */
+.autocomplete-container {
+  position: relative;
+  width: 100%;
+}
+
+.autocomplete-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 999;
+  margin-top: 4px;
+  padding: 0.25rem 0;
+  list-style: none;
+}
+
+.autocomplete-item {
+  padding: 0.6rem 0.85rem;
+  font-size: 0.88rem;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  text-align: left;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.autocomplete-item--loading {
+  color: var(--muted);
+  cursor: default;
+  font-style: italic;
+}
+
+.autocomplete-item--loading:hover {
+  background: transparent;
+  color: var(--muted);
+}

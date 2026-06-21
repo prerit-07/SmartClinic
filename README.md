@@ -158,7 +158,6 @@ npm run dev          # http://localhost:3001
 ```bash
 cd client
 npm install
-cp .env.example .env # VITE_SERVER_URL defaults to http://localhost:3001
 npm run dev           # http://localhost:5173
 ```
 
