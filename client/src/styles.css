@@ -781,6 +781,39 @@ select:focus {
   animation: slideDown 0.3s ease-out;
 }
 
+/* One-time sound unlock gate — browsers block audio until a real click
+   happens on the page, so the Patient screen (often opened cold, with
+   nobody clicking anything) needs an explicit tap before the chime works. */
+.sound-gate {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
+  border: none;
+  background: var(--accent, #0f766e);
+  color: white;
+  text-align: center;
+  padding: 0.75rem 1rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  font-family: inherit;
+  cursor: pointer;
+  z-index: 10000;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+  animation: pulse-light 1.6s infinite alternate;
+}
+.sound-gate:hover {
+  filter: brightness(1.08);
+}
+.sound-gate__icon {
+  font-size: 1.1rem;
+}
+
 /* Label for Doctor/Receptionist screens when disconnected/updating */
 .doctor-conn-label {
   font-size: 0.85rem;
@@ -808,50 +841,48 @@ select:focus {
   }
 }
 
-/* ── Autocomplete City Dropdown ── */
+/* ── Autocomplete dropdown ── */
 .autocomplete-container {
   position: relative;
   width: 100%;
 }
-
 .autocomplete-dropdown {
   position: absolute;
   top: 100%;
   left: 0;
   right: 0;
+  z-index: 100;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
-  max-height: 200px;
-  overflow-y: auto;
-  z-index: 999;
-  margin-top: 4px;
-  padding: 0.25rem 0;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 8px 24px rgba(15, 35, 52, 0.12);
   list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
 }
-
 .autocomplete-item {
-  padding: 0.6rem 0.85rem;
-  font-size: 0.88rem;
-  color: var(--text);
+  padding: 0.6rem 0.9rem;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  text-align: left;
+  font-size: 0.88rem;
+  border-bottom: 1px solid #f0f4f7;
+  transition: background 0.1s;
 }
-
+.autocomplete-item:last-child {
+  border-bottom: none;
+}
 .autocomplete-item:hover,
 .autocomplete-item.active {
   background: var(--accent-soft);
   color: var(--accent);
 }
-
 .autocomplete-item--loading {
   color: var(--muted);
-  cursor: default;
   font-style: italic;
+  cursor: default;
 }
-
 .autocomplete-item--loading:hover {
   background: transparent;
   color: var(--muted);

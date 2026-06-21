@@ -3,10 +3,30 @@ import { useQueue } from '../useQueue.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Web-Audio chime — no audio files needed.
+//
+// Browsers (Chrome/Safari/Firefox) block AudioContext from producing sound
+// until the page has received a real user gesture (a click/tap). The Patient
+// screen is typically opened cold — staff load the URL and walk away, with
+// nobody clicking anything on THIS screen before the first chime needs to
+// fire — so without an explicit unlock step, the very first call is silently
+// blocked. We keep a single shared AudioContext, created/resumed once on a
+// user gesture (see SoundGate below), and reuse it for every chime after
+// that instead of creating a fresh context per call.
 // ─────────────────────────────────────────────────────────────────────────────
+let sharedAudioCtx = null;
+
+function getAudioContext() {
+  if (!sharedAudioCtx) {
+    sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return sharedAudioCtx;
+}
+
 function playChime() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getAudioContext();
+    if (ctx.state === 'suspended') return; // still locked, nothing we can do here
+
     const frequencies = [880, 1320, 1760];
     const masterGain = ctx.createGain();
     masterGain.gain.setValueAtTime(0.55, ctx.currentTime);
@@ -25,9 +45,8 @@ function playChime() {
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime  + 1.8);
     });
-    setTimeout(() => ctx.close(), 2200);
   } catch {
-    // AudioContext blocked — silently skip
+    // AudioContext unavailable — silently skip
   }
 }
 
@@ -48,7 +67,23 @@ function playChime() {
 export default function Patient() {
   const { state, connected, hasSynced } = useQueue();
   const [flash, setFlash]   = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(false);
   const prevTokenRef        = useRef(null);   // null = not yet initialised
+
+  // One-time user gesture: creates/resumes the shared AudioContext so the
+  // browser's autoplay policy allows future chimes to actually produce sound.
+  function enableSound() {
+    try {
+      const ctx = getAudioContext();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      setSoundEnabled(true);
+    } catch {
+      // AudioContext unavailable in this browser — proceed without sound
+      setSoundEnabled(true);
+    }
+  }
 
   // Detect "Now Serving" change → chime + flash.
   // We use hasSynced so the very first state sync never triggers it.
@@ -98,6 +133,20 @@ export default function Patient() {
 
   return (
     <div className="page patient">
+      {!soundEnabled && (
+        <button
+          type="button"
+          className="sound-gate"
+          onClick={enableSound}
+          aria-label="Tap to enable the call-out chime for this screen"
+        >
+          <span className="sound-gate__icon" aria-hidden="true">🔔</span>
+          <span className="sound-gate__text">
+            Tap once to enable the call-out sound on this screen
+          </span>
+        </button>
+      )}
+
       {!connected && (
         <div className="connection-banner" role="alert">
           ⚠️ Connection lost. Trying to reconnect to clinic...
